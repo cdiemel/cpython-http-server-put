@@ -659,6 +659,43 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         self.directory = os.fspath(directory)
         super().__init__(*args, **kwargs)
 
+    def do_PUT(self):
+        """Save a file following a HTTP PUT request"""
+        file_name = os.path.basename(self.path)
+        
+        # Translate the provided path to full path.
+        full_path = self.translate_path(self.path)
+        
+        # Create relative path for saving the file.
+        rel_path = os.path.relpath(full_path,os.getcwd())
+        
+        # If the path doesn't exist return 400 Bad Request.
+        if not os.path.exists(os.path.dirname(full_path)):
+            self.send_response(400, 'Bad Request')
+            self.end_headers()
+            reply_body = '"%s" unable to be uploaded\n' % file_name
+            self.wfile.write(reply_body.encode('utf-8'))
+            return
+
+        # Determine if the file existed before writing the new file.
+        file_exists = os.path.exists(rel_path)
+
+        file_length = int(self.headers['Content-Length'])
+        with open(rel_path, 'wb') as output_file:
+            output_file.write(self.rfile.read(file_length))
+        
+        if file_exists:
+            self.send_response(200, 'OK')
+            self.end_headers()
+            reply_body = '"%s" overwritten\n' % file_name
+            self.wfile.write(reply_body.encode('utf-8'))
+            return
+            
+        self.send_response(201, 'Created')
+        self.end_headers()
+        reply_body = '"%s" saved\n' % file_name
+        self.wfile.write(reply_body.encode('utf-8'))
+        
     def do_GET(self):
         """Serve a GET request."""
         f = self.send_head()
