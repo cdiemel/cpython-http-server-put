@@ -630,7 +630,6 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
 
 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
-
     """Simple HTTP request handler with GET and HEAD commands.
 
     This serves files from the current directory and any of its
@@ -658,43 +657,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             self.index_pages = index_pages
         self.directory = os.fspath(directory)
         super().__init__(*args, **kwargs)
-
-    def do_PUT(self):
-        """Save a file following a HTTP PUT request"""
-        file_name = os.path.basename(self.path)
-        
-        # Translate the provided path to full path.
-        full_path = self.translate_path(self.path)
-        
-        # Create relative path for saving the file.
-        rel_path = os.path.relpath(full_path,os.getcwd())
-        
-        # If the path doesn't exist return 400 Bad Request.
-        if not os.path.exists(os.path.dirname(full_path)):
-            self.send_response(400, 'Bad Request')
-            self.end_headers()
-            reply_body = '"%s" unable to be uploaded\n' % file_name
-            self.wfile.write(reply_body.encode('utf-8'))
-            return
-
-        # Determine if the file existed before writing the new file.
-        file_exists = os.path.exists(rel_path)
-
-        file_length = int(self.headers['Content-Length'])
-        with open(rel_path, 'wb') as output_file:
-            output_file.write(self.rfile.read(file_length))
-        
-        if file_exists:
-            self.send_response(200, 'OK')
-            self.end_headers()
-            reply_body = '"%s" overwritten\n' % file_name
-            self.wfile.write(reply_body.encode('utf-8'))
-            return
-            
-        self.send_response(201, 'Created')
-        self.end_headers()
-        reply_body = '"%s" saved\n' % file_name
-        self.wfile.write(reply_body.encode('utf-8'))
         
     def do_GET(self):
         """Serve a GET request."""
@@ -927,7 +889,54 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             return guess
         return 'application/octet-stream'
 
+class SimpleHTTPRequestHandlerPUT(SimpleHTTPRequestHandler):
 
+    """Extionsion of Simple HTTP request handler to add the PUT command.
+
+    This allows upload of files to the current directory and any of its
+    subdirectories.  The MIME type for files is determined by calling
+    the .guess_type() method.
+
+    """
+        
+    def do_PUT(self):
+        """Save a file following a HTTP PUT request"""
+        file_name = os.path.basename(self.path)
+        
+        # Translate the provided path to full path.
+        full_path = self.translate_path(self.path)
+        
+        # Create relative path for saving the file.
+        rel_path = os.path.relpath(full_path,os.getcwd())
+        
+        # If the path doesn't exist return 400 Bad Request.
+        if not os.path.exists(os.path.dirname(full_path)):
+            self.send_response(400, 'Bad Request')
+            self.end_headers()
+            reply_body = '"%s" unable to be uploaded\n' % file_name
+            self.wfile.write(reply_body.encode('utf-8'))
+            return
+
+        # Determine if the file existed before writing the new file.
+        file_exists = os.path.exists(rel_path)
+
+        file_length = int(self.headers['Content-Length'])
+        with open(rel_path, 'wb') as output_file:
+            output_file.write(self.rfile.read(file_length))
+        
+        if file_exists:
+            self.send_response(200, 'OK')
+            self.end_headers()
+            reply_body = '"%s" overwritten\n' % file_name
+            self.wfile.write(reply_body.encode('utf-8'))
+            return
+            
+        self.send_response(201, 'Created')
+        self.end_headers()
+        reply_body = '"%s" saved\n' % file_name
+        self.wfile.write(reply_body.encode('utf-8'))
+        
+        
 # Utilities for CGIHTTPRequestHandler
 
 def _url_collapse_path(path):
@@ -1316,11 +1325,15 @@ if __name__ == '__main__':
     parser.add_argument('port', default=8000, type=int, nargs='?',
                         help='bind to this port '
                              '(default: %(default)s)')
+    parser.add_argument('--put', action='store_true',
+                        help='all PUT functionality')
     args = parser.parse_args()
     if args.cgi:
         handler_class = CGIHTTPRequestHandler
     else:
         handler_class = SimpleHTTPRequestHandler
+        if args.put:
+            handler_class = SimpleHTTPRequestHandlerPUT
 
     # ensure dual-stack is not disabled; ref #38907
     class DualStackServer(ThreadingHTTPServer):
