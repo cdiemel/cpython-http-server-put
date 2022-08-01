@@ -1326,7 +1326,7 @@ if __name__ == '__main__':
                         help='bind to this port '
                              '(default: %(default)s)')
     parser.add_argument('--put', action='store_true',
-                        help='all PUT functionality')
+                        help='allow PUT requests')
     args = parser.parse_args()
     if args.cgi:
         handler_class = CGIHTTPRequestHandler
